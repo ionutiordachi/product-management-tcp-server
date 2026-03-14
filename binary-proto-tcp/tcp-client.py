@@ -17,21 +17,33 @@ class Request:
     self.resource = resource
 
 def get_command(command):
-    c = command.strip()
-    items = c.split(' ')
-    request = Request(items[0], items[1], ' '.join(items[2:]))
-    stream = io.BytesIO()
-    pickle.dump(request, stream)
-    serialized_payload = stream.getvalue()
-    payload_length = len(serialized_payload) + 1
-    return payload_length.to_bytes(1, byteorder='big') + serialized_payload
-
+    try:
+        c = command.strip()
+        items = c.split(' ')
+        if len(items) < 2:
+            return None
+        request = Request(items[0], items[1], ' '.join(items[2:]))
+        stream = io.BytesIO()
+        pickle.dump(request, stream)
+        serialized_payload = stream.getvalue()
+        payload_length = len(serialized_payload) + 1
+        return payload_length.to_bytes(1, byteorder='big') + serialized_payload
+    except Exception as e:
+        print(f"Error building command: {e}")
+        return None
+    
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.connect((HOST, PORT))
     command = ''
-    while command.strip() != 'exit':
+    while True:
         command = input('connected>')
-        s.send(get_command(command))
+        if command.strip() == 'exit':
+            break
+        data = get_command(command)
+        if data is None:
+            print("Invalid command format")
+            continue
+        s.send(data)
         data = s.recv(BUFFER_SIZE)
         if not data:
             break
@@ -42,6 +54,6 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             data = s.recv(BUFFER_SIZE)
             full_data = full_data + data
             remaining = remaining - len(data)
-        stream = io.BytesIO(full_data[1:])  
+        stream = io.BytesIO(full_data[1:])
         response = pickle.load(stream)
         print(response.payload)

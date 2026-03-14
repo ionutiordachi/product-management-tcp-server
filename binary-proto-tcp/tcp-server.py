@@ -33,40 +33,47 @@ class State:
     self.resources.pop(key, None)
     self.lock.release()
   def get(self, key):
-    if key in self.resources:
-      return self.resources[key]
-    else:
-      return None
+    self.lock.acquire()
+    result= self.resources.get(key,None)
+    self.lock.release()
+    return result
 
 state = State()
 
 def process_command(data):
-  payload = data[1:]
-  stream = io.BytesIO(payload)  
-  request = pickle.load(stream)
-  payload = 'command not recognized, doing nothing'
-  if request.command == 'add':
-    state.add(request.key, request.resource)
-    payload = f'{request.key} added'
-  elif request.command == 'remove':
-    state.remove(request.key)
-    payload = f'{request.key} removed'
-  elif request.command == 'get':
-    payload = state.get(request.key)
-    if not payload:
-      payload = 'key was not found'
-  stream = io.BytesIO()
-  pickle.dump(Response(payload), stream)
-  serialized_payload = stream.getvalue()
-  payload_length = len(serialized_payload) + 1
-  return payload_length.to_bytes(1, byteorder='big') + serialized_payload
+    try:
+        payload = data[1:]
+        stream = io.BytesIO(payload)
+        request = pickle.load(stream)
+    except Exception as e:
+        payload = f"Error: could not parse request - {e}"
+        stream = io.BytesIO()
+        pickle.dump(Response(payload), stream)
+        serialized_payload = stream.getvalue()
+        payload_length = len(serialized_payload) + 1
+        return payload_length.to_bytes(1, byteorder='big') + serialized_payload
+
+    payload = 'command not recognized, doing nothing'
+    if request.command == 'add':
+        state.add(request.key, request.resource)
+        payload = f'{request.key} added'
+    elif request.command == 'remove':
+        state.remove(request.key)
+        payload = f'{request.key} removed'
+    elif request.command == 'get':
+        payload = state.get(request.key)
+        if not payload:
+            payload = 'key was not found'
+
+    stream = io.BytesIO()
+    pickle.dump(Response(payload), stream)
+    serialized_payload = stream.getvalue()
+    payload_length = len(serialized_payload) + 1
+    return payload_length.to_bytes(1, byteorder='big') + serialized_payload
 
 def handle_client(client):
   with client:
     while True:
-      if client == None:
-        break
-      is_new_command = True
       data = client.recv(BUFFER_SIZE)
       if not data:
         break
