@@ -44,6 +44,9 @@ def main():
             s.sendall(command.encode('utf-8'))
             response = receive_full_message(s)
             print(f"Server response: {response}")
+            
+            if response == "Goodbye":
+                break
 
 if __name__ == "__main__":
     main()

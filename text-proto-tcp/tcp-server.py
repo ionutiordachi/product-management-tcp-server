@@ -25,15 +25,40 @@ class State:
                 del self.data[key]
                 return f"{key} removed"
             return "Key not found"
-
+    def list_all(self):
+        with self.lock:
+            if not self.data:
+                return "DATA|"
+            items = ','.join(f"{k}={v}" for k,v in self.data.items())
+            return f"DATA|{items}"
+    def count(self):
+        with self.lock:
+            return f"DATA {len(self.data)}"
+    def clear(self):
+        with self.lock:
+            self.data.clear()
+            return "all data deleted"
+    def update(self, key, value):
+        with self.lock:
+            if key not in self.data:
+                return "ERROR invalid key"
+            self.data[key]=value
+            return "Data updated"
+    def pop(self,key):
+        with self.lock:
+            if key not in self.data:
+                return "ERROR invalid key"
+            value = self.data.pop(key)
+            return f"Data {value}"
 state = State()
 
 def process_command(command):
     parts = command.split()
-    if len(parts) < 2:
+    if not parts:
         return "Invalid command format"
 
-    cmd, key = parts[0], parts[1]
+    cmd= parts[0]
+    key = parts[1] if len(parts)>1 else None
     
     if cmd == "add" and len(parts) > 2:
         return state.add(key, ' '.join(parts[2:]))
@@ -41,7 +66,22 @@ def process_command(command):
         return state.get(key)
     elif cmd == "remove" and len(parts) == 2:
         return state.remove(key)
-    
+    elif cmd=="list":
+        return state.list_all()
+    elif cmd == "count":
+        return state.count()
+    elif cmd =="clear":
+        return state.clear()
+    elif cmd == "update":
+        if len(parts) < 3:
+            return "Error usage: Update key value"
+        return state.update(key,' '.join(parts[2:]))
+    elif cmd == "pop":
+        if len(parts) != 2:
+            return "ERROR usage: POP key"
+        return state.pop(key)
+    elif cmd == "quit":
+        return "quit"
     return "Invalid command"
 
 def handle_client(client_socket):
@@ -55,6 +95,10 @@ def handle_client(client_socket):
                 command = data.decode('utf-8').strip()
                 response = process_command(command)
                 
+                if response == "quit":
+                    client_socket.sendall(f"{len('Goodbye')} Goodbye".encode('utf-8'))
+                    break
+
                 response_data = f"{len(response)} {response}".encode('utf-8')
                 client_socket.sendall(response_data)
 
